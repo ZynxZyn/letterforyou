@@ -45,7 +45,7 @@ function buildMotion(count) {
   })
 }
 
-function FloatingLetters({ count = 22, onOpen, openedId = null }) {
+function FloatingLetters({ count = 22, onOpen, openedId = null, titles = [] }) {
   const cards = useMemo(() => buildMotion(count), [count])
   const state = useMemo(() => cards.map((c) => ({ ...c })), [cards])
   const driftEls = useRef([])
@@ -146,7 +146,9 @@ function FloatingLetters({ count = 22, onOpen, openedId = null }) {
               aria-label={`Buka surat nomor ${card.id + 1}`}
             >
               <span className="letter-paper" aria-hidden="true" />
-              <span className="letter-card-label">Surat {card.id + 1}</span>
+              <span className="letter-card-label">
+                {titles[card.id] || `Surat ${card.id + 1}`}
+              </span>
             </button>
           </div>
         </div>

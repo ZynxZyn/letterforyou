@@ -5,7 +5,7 @@ import Slideshow from './components/Slideshow'
 import FloatingLetters from './components/FloatingLetters'
 import LetterModal from './components/LetterModal'
 import { phrases } from './data/phrases'
-import { getLetterForCard, getLetters, loadRemoteLetters } from './data/letters'
+import { getLetterRowForCard, getLetterRows, getLetters, loadRemoteLetters } from './data/letters'
 import { R2_BASE, getSongForLetter, loadRemoteState } from './data/songs'
 import './styles/app.css'
 
@@ -74,7 +74,7 @@ function App() {
     ? null
     : {
         index: openCard,
-        message: getLetterForCard(openCard + 1),
+        ...getLetterRowForCard(openCard + 1),
         song: getSongForLetter(openCard + 1),
       }
 
@@ -126,13 +126,20 @@ function App() {
         )}
 
         {stage === STAGE.LETTERS && (
-          <FloatingLetters count={getLetters().length} onOpen={setOpenCard} openedId={openCard} />
+          <FloatingLetters
+            count={getLetters().length}
+            titles={getLetterRows().map((r) => r.title)}
+            onOpen={setOpenCard}
+            openedId={openCard}
+          />
         )}
       </div>
 
       {opened && showModal && (
         <LetterModal
           index={opened.index}
+          title={opened.title}
+          sender={opened.sender}
           message={opened.message}
           song={opened.song}
           onClose={closeCard}

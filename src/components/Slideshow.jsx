@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-
-const images = Object.entries(
-  import.meta.glob(
-    ['../assets/images/*.{jpg,jpeg,png,webp,gif}', '!../assets/images/logo-tosla.png'],
-    {
-      eager: true,
-      query: '?url',
-      import: 'default',
-    }
-  )
-).map(([, src]) => src)
+import { getImageItems, loadRemoteImages } from '../data/images'
 
 const CAROUSEL_MS = 2600
 const FLY_MS = 3600
@@ -142,8 +132,14 @@ function Carousel({ images: imgs, onDone }) {
 
   return (
     <div className="carousel" ref={trackRef} aria-label="Galeri kenangan">
-      {imgs.map((src, i) => (
-        <img key={src} src={src} alt={`Kenangan ${i + 1}`} loading="lazy" draggable="false" />
+      {imgs.map((item, i) => (
+        <img
+          key={item.name}
+          src={item.src}
+          alt={`Kenangan ${i + 1}`}
+          loading="lazy"
+          draggable="false"
+        />
       ))}
     </div>
   )
@@ -158,17 +154,31 @@ function Slideshow({ onComplete }) {
 
   const [flying, setFlying] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [items, setItems] = useState(() => getImageItems())
   const reduced = useMemo(
     () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     []
   )
   const isMobile = useMemo(() => window.matchMedia('(max-width: 640px)').matches, [])
-  const [autoActive, setAutoActive] = useState(!reduced && images.length > 0)
+  const [autoActive, setAutoActive] = useState(() => !reduced && items.length > 0)
   const autoRef = useRef(autoActive)
 
   useEffect(() => {
     autoRef.current = autoActive
   }, [autoActive])
+
+  useEffect(() => {
+    let active = true
+    loadRemoteImages().then(() => {
+      if (!active) return
+      const imgs = getImageItems()
+      setItems(imgs)
+      if (imgs.length > 0) setAutoActive((prev) => prev || !reduced)
+    })
+    return () => {
+      active = false
+    }
+  }, [reduced])
 
   useEffect(() => () => clearTimeout(timerRef.current), [])
 
@@ -216,7 +226,7 @@ function Slideshow({ onComplete }) {
     )
     sectionRefs.current.forEach((el) => el && obs.observe(el))
     return () => obs.disconnect()
-  }, [])
+  }, [items.length])
 
   useEffect(() => {
     const el = containerRef.current
@@ -237,7 +247,7 @@ function Slideshow({ onComplete }) {
   }, [])
 
   useEffect(() => {
-    if (!autoActive || images.length === 0) return undefined
+    if (!autoActive || items.length === 0) return undefined
     const el = containerRef.current
     if (!el) return undefined
     let raf = 0
@@ -255,7 +265,7 @@ function Slideshow({ onComplete }) {
     }
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
-  }, [autoActive, isMobile])
+  }, [autoActive, isMobile, items.length])
 
   const finishAuto = useCallback(() => {
     if (!autoRef.current) return
@@ -270,7 +280,7 @@ function Slideshow({ onComplete }) {
 
   const onCarouselDone = useCallback(() => finishAuto(), [finishAuto])
 
-  if (images.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="slideshow-empty stage-enter">
         <span className="big-heart" aria-hidden="true">
@@ -278,8 +288,8 @@ function Slideshow({ onComplete }) {
         </span>
         <h2>Galeri Kenangan</h2>
         <p>
-          Belum ada foto. Tambahkan foto ke folder{' '}
-          <code>src/assets/images/</code> dan foto akan muncul otomatis di sini.
+          Belum ada foto. Tambahkan foto lewat dashboard{' '}
+          <code>(?dashboard)</code> atau folder <code>src/assets/images/</code>.
         </p>
         <button type="button" className="btn-primary" onClick={flyToLetters}>
           Lanjut ke Surat {'\u2192'}
@@ -297,21 +307,21 @@ function Slideshow({ onComplete }) {
       <div className="slideshow-progress" aria-hidden="true">
         <span style={{ width: `${progress * 100}%` }} />
       </div>
-      {images.map((src, i) => (
+      {items.map((item, i) => (
         <section
-          key={src}
+          key={item.name}
           ref={(el) => {
             sectionRefs.current[i] = el
           }}
           className="slide-section"
           aria-label={`Kenangan ${i + 1}`}
         >
-          <img src={src} alt={`Kenangan ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} />
+          <img src={item.src} alt={`Kenangan ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} />
         </section>
       ))}
       <section
         ref={(el) => {
-          sectionRefs.current[images.length] = el
+          sectionRefs.current[items.length] = el
         }}
         className="slideshow-end"
       >
@@ -319,7 +329,7 @@ function Slideshow({ onComplete }) {
           <em>TOSLA</em> SATU
         </h2>
         <p className="slideshow-end-sub">Romong Lakuma Detule Dehasa Mangiso Pasu pasu Ngimbawe Bau-bau Kumantara</p>
-        <Carousel images={images} onDone={onCarouselDone} />
+        <Carousel images={items} onDone={onCarouselDone} />
         <button type="button" className="btn-primary" onClick={flyToLetters}>
           Terimakasih {'\u2192'}
         </button>

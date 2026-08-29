@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import MusicPlayer from './MusicPlayer'
 
-function LetterModal({ index, message, song, onClose, onStopMusic }) {
+function LetterModal({ index, title, sender, message, song, onClose, onStopMusic }) {
   const closeRef = useRef(null)
   const cardRef = useRef(null)
 
@@ -50,9 +50,11 @@ function LetterModal({ index, message, song, onClose, onStopMusic }) {
           {'\u2715'}
         </button>
         <h2 id="modal-title" className="modal-title">
-          Surat #{index + 1}
+          {title || `Surat #${index + 1}`}
         </h2>
-        <p className="modal-subtitle">untuk kalian, para pendahulu</p>
+        <p className="modal-subtitle">
+          {sender ? `dari ${sender}` : 'untuk kalian, para pendahulu'}
+        </p>
         <p className="modal-message">{message}</p>
         <MusicPlayer song={song} onStop={onStopMusic} />
       </div>

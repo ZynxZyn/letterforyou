@@ -23,6 +23,19 @@ function mimeFor(name) {
   return map[ext] || 'application/octet-stream'
 }
 
+function mimeForImage(name) {
+  const ext = name.split('.').pop().toLowerCase()
+  const map = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    avif: 'image/avif',
+  }
+  return map[ext] || 'application/octet-stream'
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
@@ -34,7 +47,25 @@ function db(env) {
 }
 
 async function ensureLettersTable(sql) {
-  await sql`CREATE TABLE IF NOT EXISTS letters (id integer PRIMARY KEY, message text NOT NULL)`
+  await sql`CREATE TABLE IF NOT EXISTS letters (
+    id integer PRIMARY KEY,
+    title text NOT NULL DEFAULT '',
+    sender text NOT NULL DEFAULT '',
+    message text NOT NULL
+  )`
+  await sql`ALTER TABLE letters ADD COLUMN IF NOT EXISTS title text NOT NULL DEFAULT ''`
+  await sql`ALTER TABLE letters ADD COLUMN IF NOT EXISTS sender text NOT NULL DEFAULT ''`
+}
+
+function normalizeLetter(value) {
+  if (typeof value === 'string') {
+    return { title: '', sender: '', message: value }
+  }
+  return {
+    title: String(value.title || ''),
+    sender: String(value.sender || ''),
+    message: String(value.message || ''),
+  }
 }
 
 export default {
@@ -96,6 +127,36 @@ export default {
         })
       }
 
+      const imageMatch = url.pathname.match(/^\/images\/(.+)$/)
+      if (imageMatch && request.method === 'GET') {
+        const name = decodeURIComponent(imageMatch[1])
+        const obj = await env.BUCKET.get(`images/${name}`)
+        if (!obj) return new Response('not found', { status: 404, headers: cors })
+        return new Response(obj.body, {
+          headers: {
+            ...cors,
+            'Content-Type': mimeForImage(name),
+            'Cache-Control': 'public, max-age=86400',
+          },
+        })
+      }
+
+      if (url.pathname === '/api/images' && request.method === 'GET') {
+        let objects = []
+        let cursor
+        do {
+          const page = await env.BUCKET.list(
+            cursor ? { prefix: 'images/', cursor } : { prefix: 'images/' }
+          )
+          objects = objects.concat(page.objects)
+          cursor = page.truncated ? page.cursor : undefined
+        } while (cursor)
+        const names = objects
+          .map((o) => o.key.replace(/^images\//, ''))
+          .sort((a, b) => a.localeCompare(b))
+        return handle(200, { images: names })
+      }
+
       if (url.pathname === '/api/state') {
         const config = await env.BUCKET.get('config.json')
         const configData = config
@@ -103,7 +164,7 @@ export default {
           : { letterSongs: {} }
         const listed = await env.BUCKET.list()
         const files = listed.objects
-          .filter((o) => o.key !== 'config.json')
+          .filter((o) => o.key !== 'config.json' && !o.key.includes('/'))
           .sort((a, b) => a.key.localeCompare(b.key))
           .map((o) => o.key)
         return handle(200, { files, letterSongs: configData.letterSongs || {} })
@@ -112,21 +173,27 @@ export default {
       if (url.pathname === '/api/letters' && request.method === 'GET') {
         const sql = db(env)
         await ensureLettersTable(sql)
-        const rows = await sql`SELECT id, message FROM letters ORDER BY id`
+        const rows = await sql`SELECT id, title, sender, message FROM letters ORDER BY id`
         return handle(200, {
           seeded: rows.length > 0,
-          letters: rows.map((r) => ({ id: Number(r.id), message: String(r.message) })),
+          letters: rows.map((r) => ({
+            id: Number(r.id),
+            title: String(r.title || ''),
+            sender: String(r.sender || ''),
+            message: String(r.message),
+          })),
         })
       }
 
       if (url.pathname === '/api/letters/create' && request.method === 'POST') {
         if (!authed()) return handle(401, { ok: false, error: 'unauthorized' })
         const body = await request.json()
+        const { title, sender, message } = normalizeLetter(body)
         const sql = db(env)
         await ensureLettersTable(sql)
         const rows =
-          await sql`INSERT INTO letters (id, message)
-            VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM letters), ${String(body.message || '')})
+          await sql`INSERT INTO letters (id, title, sender, message)
+            VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM letters), ${title}, ${sender}, ${message})
             RETURNING id`
         return handle(200, { ok: true, id: Number(rows[0].id) })
       }
@@ -139,9 +206,15 @@ export default {
           const sql = db(env)
           await ensureLettersTable(sql)
           await sql.transaction(
-            entries.map(([id, msg]) => sql`INSERT INTO letters (id, message)
-              VALUES (${Number(id)}, ${String(msg)})
-              ON CONFLICT (id) DO UPDATE SET message = EXCLUDED.message`)
+            entries.map(([id, raw]) => {
+              const { title, sender, message } = normalizeLetter(raw)
+              return sql`INSERT INTO letters (id, title, sender, message)
+                VALUES (${Number(id)}, ${title}, ${sender}, ${message})
+                ON CONFLICT (id) DO UPDATE SET
+                  title = EXCLUDED.title,
+                  sender = EXCLUDED.sender,
+                  message = EXCLUDED.message`
+            })
           )
         }
         return handle(200, { ok: true })
@@ -166,6 +239,21 @@ export default {
         await env.BUCKET.put(name, request.body, {
           httpMetadata: { contentType: mimeFor(name) },
         })
+        return handle(200, { ok: true })
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/upload-image') {
+        const name = sanitizeName(url.searchParams.get('name'))
+        if (!name) return handle(400, { ok: false, error: 'invalid name' })
+        await env.BUCKET.put(`images/${name}`, request.body, {
+          httpMetadata: { contentType: mimeForImage(name) },
+        })
+        return handle(200, { ok: true })
+      }
+
+      if (request.method === 'DELETE' && url.pathname === '/api/delete-image') {
+        const name = sanitizeName(url.searchParams.get('name'))
+        if (name) await env.BUCKET.delete(`images/${name}`)
         return handle(200, { ok: true })
       }
 

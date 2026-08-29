@@ -1,7 +1,10 @@
 import { letter, messages } from './messages'
 import { R2_BASE } from './songs'
 
-export const defaultLetters = [letter, ...messages.slice(0, 21)]
+export const defaultLetters = [
+  { title: 'Untuk Kalian', sender: 'Kepengurusan Tosla 028', message: letter },
+  ...messages.slice(0, 21).map((m) => ({ title: '', sender: '', message: m })),
+]
 
 const AUTH = { Authorization: `Bearer ${import.meta.env.VITE_R2_KEY || ''}` }
 
@@ -21,7 +24,12 @@ export function loadRemoteLetters() {
               seeded: Boolean(data.seeded),
               rows: Array.isArray(data.letters)
                 ? data.letters
-                    .map((r) => ({ id: Number(r.id), message: String(r.message) }))
+                    .map((r) => ({
+                      id: Number(r.id),
+                      title: String(r.title || ''),
+                      sender: String(r.sender || ''),
+                      message: String(r.message),
+                    }))
                     .sort((a, b) => a.id - b.id)
                 : [],
             }
@@ -38,7 +46,7 @@ export function lettersAreSeeded() {
 
 export function getLetterRows() {
   if (!remote || !remote.seeded) {
-    return defaultLetters.map((message, i) => ({ id: i + 1, message }))
+    return defaultLetters.map((l, i) => ({ id: i + 1, ...l }))
   }
   return remote.rows
 }
@@ -47,9 +55,10 @@ export function getLetters() {
   return getLetterRows().map((r) => r.message)
 }
 
-export function getLetterForCard(number) {
-  const all = getLetters()
-  return all[number - 1] || ''
+export function getLetterRowForCard(number) {
+  return (
+    getLetterRows()[number - 1] || { id: number, title: '', sender: '', message: '' }
+  )
 }
 
 async function request(url, body, method = 'POST') {
@@ -65,20 +74,20 @@ async function request(url, body, method = 'POST') {
   return res.json().catch(() => ({}))
 }
 
-export async function saveLetter(id, message) {
-  await request(`${R2_BASE}/api/letters`, { letters: { [id]: message } })
+export async function saveLetter(id, { title = '', sender = '', message = '' } = {}) {
+  await request(`${R2_BASE}/api/letters`, { letters: { [id]: { title, sender, message } } })
 }
 
 export async function seedLetters() {
   const letters = {}
-  defaultLetters.forEach((msg, i) => {
-    letters[i + 1] = msg
+  defaultLetters.forEach((l, i) => {
+    letters[i + 1] = { title: l.title, sender: l.sender, message: l.message }
   })
   await request(`${R2_BASE}/api/letters`, { letters })
 }
 
-export async function createLetter(message = '') {
-  const data = await request(`${R2_BASE}/api/letters/create`, { message })
+export async function createLetter({ title = '', sender = '', message = '' } = {}) {
+  const data = await request(`${R2_BASE}/api/letters/create`, { title, sender, message })
   return data.id
 }
 

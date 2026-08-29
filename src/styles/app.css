@@ -976,10 +976,18 @@ button:focus-visible {
 .letter-card-label {
   position: relative;
   z-index: 3;
-  font-size: 0.78rem;
-  letter-spacing: 0.14em;
+  max-width: 88%;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-black);
+  text-align: center;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .letter-card:hover {
@@ -1354,6 +1362,40 @@ button:focus-visible {
   font-size: 0.84rem;
 }
 
+.dash-tabs {
+  max-width: 880px;
+  margin: 0 auto 18px;
+  display: flex;
+  gap: 6px;
+  background: #e9edf3;
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.dash-tabs button {
+  flex: 1;
+  border: none;
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: transparent;
+  color: #5b6b7d;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.dash-tabs button:hover {
+  color: #2c5275;
+}
+
+.dash-tabs button.is-active {
+  background: #fff;
+  color: var(--color-blue);
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.12);
+}
+
 .dash-card {
   max-width: 880px;
   margin: 0 auto 18px;
@@ -1480,6 +1522,63 @@ button:focus-visible {
 .dash-crop-dur {
   font-size: 0.78rem;
   color: #6b7a8d;
+}
+
+.dash-imgs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.dash-img {
+  position: relative;
+  border: 1px solid #e3e8ee;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f1f4f7;
+}
+
+.dash-img img {
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+  display: block;
+}
+
+.dash-img-del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dash-img-del:hover:not(:disabled) {
+  background: var(--color-red);
+}
+
+.dash-img-del:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dash-img-name {
+  display: block;
+  padding: 6px 8px;
+  font-size: 0.68rem;
+  color: #6b7a8d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dash-btn-ghost {
@@ -1656,6 +1755,38 @@ button:focus-visible {
   font-size: 0.82rem;
   font-weight: 600;
   color: #4b5563;
+}
+
+.dash-letter-fields {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dash-letter-fields input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d8dfe7;
+  background: #fff;
+  color: #1f2937;
+  font-family: inherit;
+  font-size: 0.82rem;
+}
+
+.dash-letter-fields input::placeholder {
+  color: #9aa5b1;
+}
+
+.dash-letter-fields input:focus-visible {
+  outline: 2px solid var(--color-blue);
+  outline-offset: 1px;
+}
+
+.dash-letter-fields input:disabled {
+  background: #f1f4f7;
+  color: #9aa5b1;
 }
 
 .dash-letter-actions {

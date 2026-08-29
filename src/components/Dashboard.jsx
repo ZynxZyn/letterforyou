@@ -8,6 +8,7 @@ import {
   saveLetter,
   seedLetters,
 } from '../data/letters'
+import { getImageItems, loadRemoteImages } from '../data/images'
 import { R2_BASE, NO_SONG, getLetterSongs, getSongs, loadRemoteState } from '../data/songs'
 import {
   cropAudio,
@@ -31,6 +32,9 @@ function Dashboard() {
   const [songs, setSongs] = useState([])
   const [mapping, setMapping] = useState({})
   const [letters, setLetters] = useState([])
+  const [imgs, setImgs] = useState([])
+  const [imgDragOver, setImgDragOver] = useState(false)
+  const [imgBusy, setImgBusy] = useState(false)
   const [seeded, setSeeded] = useState(false)
   const [drafts, setDrafts] = useState({})
   const [songDrafts, setSongDrafts] = useState({})
@@ -40,6 +44,7 @@ function Dashboard() {
   const [seeding, setSeeding] = useState(false)
   const [adding, setAdding] = useState(false)
   const [message, setMessage] = useState('')
+  const [tab, setTab] = useState('surat')
 
   const [cropFile, setCropFile] = useState('')
   const [cropBuf, setCropBuf] = useState(null)
@@ -51,13 +56,70 @@ function Dashboard() {
   const [cropBusy, setCropBusy] = useState(false)
   const previewRef = useRef(null)
   const fileInputRef = useRef(null)
+  const imgInputRef = useRef(null)
+
+  const uploadImageFiles = async (files) => {
+    const imgsFiles = Array.from(files).filter((f) => /\.(png|jpe?g|webp|gif|avif)$/i.test(f.name))
+    if (!imgsFiles.length) {
+      setMessage('Tidak ada file gambar yang valid (png/jpg/webp/gif/avif).')
+      return
+    }
+    setImgBusy(true)
+    setMessage(`Mengunggah ${imgsFiles.length} foto…`)
+    try {
+      for (const f of imgsFiles) {
+        const res = await fetch(
+          `${R2_BASE}/api/upload-image?name=${encodeURIComponent(f.name)}`,
+          { method: 'POST', headers: AUTH, body: f }
+        )
+        if (!res.ok) throw new Error(`Gagal upload ${f.name}`)
+      }
+      setMessage('Foto diunggah. Halaman dimuat ulang…')
+      reloadSoon()
+    } catch (err) {
+      setMessage(`Gagal: ${err.message}`)
+      setImgBusy(false)
+    }
+  }
+
+  const onImgDrop = (e) => {
+    e.preventDefault()
+    setImgDragOver(false)
+    if (!imgBusy) uploadImageFiles(e.dataTransfer.files)
+  }
+
+  const onImgPick = (e) => {
+    if (!imgBusy) uploadImageFiles(e.target.files)
+    e.target.value = ''
+  }
+
+  const openImgPicker = () => {
+    if (!imgBusy) imgInputRef.current?.click()
+  }
+
+  const removeImage = async (name) => {
+    if (!window.confirm(`Hapus foto "${name}"?`)) return
+    setMessage(`Menghapus ${name}…`)
+    try {
+      const res = await fetch(`${R2_BASE}/api/delete-image?name=${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+        headers: AUTH,
+      })
+      if (!res.ok) throw new Error('Gagal menghapus')
+      setMessage('Foto dihapus. Halaman dimuat ulang…')
+      reloadSoon(400)
+    } catch (err) {
+      setMessage(`Gagal: ${err.message}`)
+    }
+  }
 
   useEffect(() => {
-    Promise.all([loadRemoteState(), loadRemoteLetters()]).then(() => {
+    Promise.all([loadRemoteState(), loadRemoteLetters(), loadRemoteImages()]).then(() => {
       setSongs(getSongs())
       setMapping(getLetterSongs())
       setLetters(getLetterRows())
       setSeeded(lettersAreSeeded())
+      setImgs(getImageItems())
     })
   }, [])
 
@@ -145,10 +207,15 @@ function Dashboard() {
     setSavingLetter(id)
     setMessage(`Menyimpan Surat ${id}…`)
     try {
-      const msg = drafts[id] ?? letters.find((r) => r.id === id)?.message ?? ''
+      const row = letters.find((r) => r.id === id) || {}
+      const draft = drafts[id] || {}
       const song = songDrafts[id] ?? mapping[id] ?? ''
       await Promise.all([
-        saveLetter(id, msg),
+        saveLetter(id, {
+          title: draft.title ?? row.title ?? '',
+          sender: draft.sender ?? row.sender ?? '',
+          message: draft.message ?? row.message ?? '',
+        }),
         saveMapping({ ...mapping, [id]: song }),
       ])
       setMessage(`Surat ${id} tersimpan. Halaman dimuat ulang…`)
@@ -280,6 +347,37 @@ function Dashboard() {
 
       {message && <div className="dash-msg">{message}</div>}
 
+      <nav className="dash-tabs" role="tablist" aria-label="Bagian dashboard">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'surat'}
+          className={tab === 'surat' ? 'is-active' : ''}
+          onClick={() => setTab('surat')}
+        >
+          Surat
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'lagu'}
+          className={tab === 'lagu' ? 'is-active' : ''}
+          onClick={() => setTab('lagu')}
+        >
+          Lagu
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'slideshow'}
+          className={tab === 'slideshow' ? 'is-active' : ''}
+          onClick={() => setTab('slideshow')}
+        >
+          Slideshow
+        </button>
+      </nav>
+
+      {tab === 'lagu' && (
       <section className="dash-card">
         <h2 className="dash-card-title">Upload Lagu</h2>
         <p className="dash-card-desc">
@@ -322,7 +420,82 @@ function Dashboard() {
           )}
         </div>
       </section>
+      )}
 
+      {tab === 'slideshow' && (
+      <section className="dash-card">
+        <h2 className="dash-card-title">
+          Foto Slideshow <span className="dash-count">{imgs.length}</span>
+        </h2>
+        <p className="dash-card-desc">
+          {REMOTE
+            ? 'Tambah atau hapus foto galeri kenangan. Tersimpan di R2.'
+            : 'Mode lokal: kelola foto memerlukan R2 (set VITE_R2_BASE).'}
+        </p>
+        <input
+          ref={imgInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: 'none' }}
+          onChange={onImgPick}
+        />
+        <div
+          className={`dash-dropzone ${imgDragOver ? 'is-dragover' : ''}`}
+          role="button"
+          tabIndex={0}
+          onClick={openImgPicker}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              openImgPicker()
+            }
+          }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setImgDragOver(true)
+          }}
+          onDragLeave={() => setImgDragOver(false)}
+          onDrop={onImgDrop}
+        >
+          {imgBusy ? (
+            <p className="dash-drop-text">Mengunggah…</p>
+          ) : (
+            <p className="dash-drop-text">
+              <span className="dash-drop-icon">{'\u2191'}</span>
+              <strong>Ketuk untuk pilih foto, atau seret & lepas di sini</strong>
+            </p>
+          )}
+        </div>
+        {imgs.length === 0 ? (
+          <p className="dash-empty" style={{ marginTop: 12 }}>
+            Belum ada foto.
+          </p>
+        ) : (
+          <div className="dash-imgs">
+            {imgs.map((img) => (
+              <div key={img.name} className="dash-img">
+                <img src={img.src} alt={img.name} />
+                <button
+                  type="button"
+                  className="dash-img-del"
+                  disabled={!REMOTE}
+                  onClick={() => removeImage(img.name)}
+                  aria-label={`Hapus ${img.name}`}
+                >
+                  {'\u2715'}
+                </button>
+                <span className="dash-img-name" title={img.name}>
+                  {img.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      )}
+
+      {tab === 'lagu' && (
       <section className="dash-card">
         <h2 className="dash-card-title">Potong Lagu</h2>
         <p className="dash-card-desc">
@@ -411,7 +584,9 @@ function Dashboard() {
         </div>
         <audio ref={previewRef} style={{ display: 'none' }} />
       </section>
+      )}
 
+      {tab === 'lagu' && (
       <section className="dash-card">
         <h2 className="dash-card-title">
           Lagu Tersedia <span className="dash-count">{songs.length}</span>
@@ -436,7 +611,9 @@ function Dashboard() {
           </div>
         )}
       </section>
+      )}
 
+      {tab === 'surat' && (
       <section className="dash-card">
         <div className="dash-card-head">
           <h2 className="dash-card-title">
@@ -466,9 +643,16 @@ function Dashboard() {
         )}
         <div className="dash-letters">
           {letters.map((row) => {
-            const value = drafts[row.id] ?? row.message
+            const draft = drafts[row.id] || {}
+            const title = draft.title ?? row.title ?? ''
+            const sender = draft.sender ?? row.sender ?? ''
+            const value = draft.message ?? row.message ?? ''
             const songValue = songDrafts[row.id] ?? mapping[row.id] ?? ''
-            const dirty = value !== row.message || songValue !== (mapping[row.id] ?? '')
+            const dirty =
+              title !== row.title ||
+              sender !== row.sender ||
+              value !== row.message ||
+              songValue !== (mapping[row.id] ?? '')
             return (
               <div key={row.id} className="dash-letter">
                 <div className="dash-letter-head">
@@ -493,11 +677,40 @@ function Dashboard() {
                     </button>
                   </div>
                 </div>
+                <div className="dash-letter-fields">
+                  <input
+                    value={title}
+                    disabled={!REMOTE}
+                    placeholder="Judul surat"
+                    onChange={(e) =>
+                      setDrafts((d) => ({
+                        ...d,
+                        [row.id]: { ...(d[row.id] || {}), title: e.target.value },
+                      }))
+                    }
+                  />
+                  <input
+                    value={sender}
+                    disabled={!REMOTE}
+                    placeholder="Dari (pengirim)"
+                    onChange={(e) =>
+                      setDrafts((d) => ({
+                        ...d,
+                        [row.id]: { ...(d[row.id] || {}), sender: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
                 <textarea
                   id={`letter-${row.id}`}
                   value={value}
                   disabled={!REMOTE}
-                  onChange={(e) => setDrafts((d) => ({ ...d, [row.id]: e.target.value }))}
+                  onChange={(e) =>
+                    setDrafts((d) => ({
+                      ...d,
+                      [row.id]: { ...(d[row.id] || {}), message: e.target.value },
+                    }))
+                  }
                   rows={3}
                 />
                 <div className="dash-letter-song">
@@ -522,6 +735,7 @@ function Dashboard() {
           })}
         </div>
       </section>
+      )}
     </div>
   )
 }
