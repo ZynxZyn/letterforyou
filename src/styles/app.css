@@ -906,21 +906,26 @@ button:focus-visible {
 
 .letter-paper {
   position: absolute;
-  left: 9%;
-  right: 9%;
-  top: 10%;
-  height: 58%;
+  left: 10%;
+  right: 10%;
+  top: 30%;
+  height: 45%;
   background: var(--color-white);
   border: 1px solid rgba(69, 123, 157, 0.35);
   border-radius: 4px;
   z-index: 0;
   pointer-events: none;
+  opacity: 0;
   transform: translateY(0) translateZ(0);
-  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease;
 }
 
 .letter-card.is-opening .letter-paper {
-  transform: translateY(-46%) translateZ(24px);
+  opacity: 1;
+  z-index: 3;
+  transform: translateY(-72%) translateZ(30px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.22);
+  transition-delay: 0.12s;
 }
 
 .letter-card::before {
@@ -930,17 +935,17 @@ button:focus-visible {
   left: 0;
   width: 100%;
   height: 56%;
-  background: var(--color-blue);
+  background: linear-gradient(180deg, #3a6a89 0%, var(--color-blue) 100%);
   clip-path: polygon(0 0, 100% 0, 50% 100%);
   border-radius: 9px 9px 0 0;
   z-index: 1;
   transform-origin: top center;
-  backface-visibility: hidden;
   transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .letter-card.is-opening::before {
-  transform: rotateX(180deg) translateY(-8px);
+  transform: rotateX(180deg);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.18);
 }
 
 .letter-card::after {
