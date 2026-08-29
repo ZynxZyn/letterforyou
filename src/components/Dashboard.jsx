@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
+import {
+  createLetter,
+  deleteLetter,
+  getLetterRows,
+  lettersAreSeeded,
+  loadRemoteLetters,
+  saveLetter,
+  seedLetters,
+} from '../data/letters'
 import { R2_BASE, getLetterSongs, getSongs, loadRemoteState } from '../data/songs'
 
-const LETTER_COUNT = 22
 const AUDIO_RE = /\.(mp3|wav|ogg|m4a|flac|aac)$/i
 const REMOTE = Boolean(R2_BASE)
 const AUTH = { Authorization: `Bearer ${import.meta.env.VITE_R2_KEY || ''}` }
@@ -13,15 +21,23 @@ function reloadSoon(ms = 600) {
 function Dashboard() {
   const [songs, setSongs] = useState([])
   const [mapping, setMapping] = useState({})
+  const [letters, setLetters] = useState([])
+  const [seeded, setSeeded] = useState(false)
+  const [drafts, setDrafts] = useState({})
   const [dragOver, setDragOver] = useState(false)
   const [busy, setBusy] = useState(false)
   const [saving, setSaving] = useState(null)
+  const [savingLetter, setSavingLetter] = useState(null)
+  const [seeding, setSeeding] = useState(false)
+  const [adding, setAdding] = useState(false)
   const [message, setMessage] = useState('')
 
   useEffect(() => {
-    loadRemoteState().then(() => {
+    Promise.all([loadRemoteState(), loadRemoteLetters()]).then(() => {
       setSongs(getSongs())
       setMapping(getLetterSongs())
+      setLetters(getLetterRows())
+      setSeeded(lettersAreSeeded())
     })
   }, [])
 
@@ -106,6 +122,61 @@ function Dashboard() {
     reloadSoon(400)
   }
 
+  const onSaveLetter = async (id) => {
+    if (savingLetter || !REMOTE) return
+    setSavingLetter(id)
+    setMessage(`Menyimpan Surat ${id}…`)
+    try {
+      await saveLetter(id, drafts[id] ?? letters.find((r) => r.id === id)?.message ?? '')
+      setMessage(`Surat ${id} tersimpan. Halaman dimuat ulang…`)
+      reloadSoon()
+    } catch (err) {
+      setMessage(`Gagal: ${err.message}`)
+      setSavingLetter(null)
+    }
+  }
+
+  const onSeed = async () => {
+    if (seeding || !REMOTE) return
+    setSeeding(true)
+    setMessage('Menyimpan 22 surat bawaan ke Neon…')
+    try {
+      await seedLetters()
+      setMessage('Selesai. Halaman dimuat ulang…')
+      reloadSoon()
+    } catch (err) {
+      setMessage(`Gagal: ${err.message}`)
+      setSeeding(false)
+    }
+  }
+
+  const onAddLetter = async () => {
+    if (adding || !REMOTE) return
+    setAdding(true)
+    setMessage('Menambahkan surat baru…')
+    try {
+      await createLetter('')
+      setMessage('Surat baru ditambahkan. Halaman dimuat ulang…')
+      reloadSoon()
+    } catch (err) {
+      setMessage(`Gagal: ${err.message}`)
+      setAdding(false)
+    }
+  }
+
+  const onDeleteLetter = async (id) => {
+    if (!REMOTE) return
+    if (!window.confirm(`Hapus Surat ${id}? Tindakan ini tidak bisa dibatalkan.`)) return
+    setMessage(`Menghapus Surat ${id}…`)
+    try {
+      await deleteLetter(id)
+      setMessage(`Surat ${id} dihapus. Halaman dimuat ulang…`)
+      reloadSoon()
+    } catch (err) {
+      setMessage(`Gagal: ${err.message}`)
+    }
+  }
+
   return (
     <div className="dashboard stage-enter">
       <header className="dash-topbar">
@@ -114,7 +185,7 @@ function Dashboard() {
         </h1>
         <div className="dash-topbar-actions">
           <span className={`dash-badge ${REMOTE ? 'is-remote' : ''}`}>
-            {REMOTE ? 'Cloudflare R2' : 'Lokal'}
+            {REMOTE ? 'Cloudflare R2 + Neon' : 'Lokal'}
           </span>
           <a className="dash-link" href={REMOTE ? '/' : '/?dev'}>
             {'\u2190'} Kembali ke situs
@@ -175,34 +246,98 @@ function Dashboard() {
       </section>
 
       <section className="dash-card">
+        <div className="dash-card-head">
+          <h2 className="dash-card-title">
+            Isi Surat <span className="dash-count">{letters.length}</span>
+          </h2>
+          <button
+            type="button"
+            className="dash-add-btn"
+            disabled={!REMOTE || adding}
+            onClick={onAddLetter}
+          >
+            {'\u002B'} Tambah Surat
+          </button>
+        </div>
+        <p className="dash-card-desc">
+          {REMOTE
+            ? 'Tambah, edit, dan hapus surat. Tersimpan ke database Neon Postgres.'
+            : 'Mode lokal: CRUD surat memerlukan Neon Postgres (set VITE_R2_BASE & secret DATABASE_URL).'}
+        </p>
+        {REMOTE && !seeded && (
+          <div className="dash-banner">
+            <p>Database Neon masih kosong — salin 22 surat bawaan agar bisa diedit.</p>
+            <button type="button" className="dash-add-btn" disabled={seeding} onClick={onSeed}>
+              {seeding ? 'Menyimpan…' : 'Simpan Semua Surat'}
+            </button>
+          </div>
+        )}
+        <div className="dash-letters">
+          {letters.map((row) => {
+            const value = drafts[row.id] ?? row.message
+            return (
+              <div key={row.id} className="dash-letter">
+                <div className="dash-letter-head">
+                  <label htmlFor={`letter-${row.id}`}>Surat {row.id}</label>
+                  <div className="dash-letter-actions">
+                    <button
+                      type="button"
+                      className="dash-letter-del"
+                      disabled={!REMOTE}
+                      onClick={() => onDeleteLetter(row.id)}
+                      aria-label={`Hapus Surat ${row.id}`}
+                    >
+                      {'\uD83D\uDDD1'}
+                    </button>
+                    <button
+                      type="button"
+                      className="dash-letter-save"
+                      disabled={!REMOTE || savingLetter === row.id || value === row.message}
+                      onClick={() => onSaveLetter(row.id)}
+                    >
+                      {savingLetter === row.id ? 'Menyimpan…' : 'Simpan'}
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  id={`letter-${row.id}`}
+                  value={value}
+                  disabled={!REMOTE}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [row.id]: e.target.value }))}
+                  rows={3}
+                />
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="dash-card">
         <h2 className="dash-card-title">
-          Lagu per Surat <span className="dash-count">1–{LETTER_COUNT}</span>
+          Lagu per Surat <span className="dash-count">{letters.length}</span>
         </h2>
         <p className="dash-card-desc">
           Pilih lagu untuk tiap amplop. Pilih «otomatis» untuk memakai giliran.
         </p>
         <div className="dash-grid">
-          {Array.from({ length: LETTER_COUNT }, (_, i) => {
-            const num = i + 1
-            return (
-              <div key={num} className="dash-row">
-                <label htmlFor={`map-${num}`}>Surat {num}</label>
-                <select
-                  id={`map-${num}`}
-                  value={mapping[num] || ''}
-                  disabled={saving === num}
-                  onChange={(e) => onMappingChange(num, e.target.value)}
-                >
-                  <option value="">Otomatis</option>
-                  {songs.map((s) => (
-                    <option key={s.file} value={s.file}>
-                      {s.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )
-          })}
+          {letters.map((row) => (
+            <div key={`map-${row.id}`} className="dash-row">
+              <label htmlFor={`map-${row.id}`}>Surat {row.id}</label>
+              <select
+                id={`map-${row.id}`}
+                value={mapping[row.id] || ''}
+                disabled={saving === row.id}
+                onChange={(e) => onMappingChange(row.id, e.target.value)}
+              >
+                <option value="">Otomatis</option>
+                {songs.map((s) => (
+                  <option key={s.file} value={s.file}>
+                    {s.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
         </div>
       </section>
     </div>

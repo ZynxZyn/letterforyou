@@ -1,0 +1,9 @@
+{
+  "name": "letterforyou-worker",
+  "private": true,
+  "type": "module",
+  "main": "worker.js",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.0"
+  }
+}

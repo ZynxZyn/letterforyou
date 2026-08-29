@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Dashboard from './components/Dashboard'
 import PhraseReveal from './components/PhraseReveal'
 import Slideshow from './components/Slideshow'
 import FloatingLetters from './components/FloatingLetters'
 import LetterModal from './components/LetterModal'
 import { phrases } from './data/phrases'
-import { letter, messages } from './data/messages'
+import { getLetterForCard, getLetters, loadRemoteLetters } from './data/letters'
 import { R2_BASE, getSongForLetter, loadRemoteState } from './data/songs'
 import './styles/app.css'
 
@@ -27,20 +27,6 @@ const HEARTS = Array.from({ length: 14 }, (_, i) => ({
   blue: i % 2 === 0,
 }))
 
-function seededShuffle(arr, seed) {
-  let s = seed
-  const rng = () => {
-    s = (s * 1664525 + 1013904223) % 4294967296
-    return s / 4294967296
-  }
-  const out = [...arr]
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rng() * (i + 1))
-    ;[out[i], out[j]] = [out[j], out[i]]
-  }
-  return out
-}
-
 const LEAVE_MS = 450
 
 function App() {
@@ -51,11 +37,9 @@ function App() {
   const [, setRemoteReady] = useState(false)
   const timerRef = useRef(null)
 
-  const shuffledMessages = useMemo(() => seededShuffle(messages, 1337), [])
-
   useEffect(() => {
     let active = true
-    loadRemoteState().then(() => {
+    Promise.all([loadRemoteState(), loadRemoteLetters()]).then(() => {
       if (active) setRemoteReady(true)
     })
     return () => {
@@ -90,10 +74,7 @@ function App() {
     ? null
     : {
         index: openCard,
-        message:
-          openCard === 0
-            ? letter
-            : shuffledMessages[openCard % shuffledMessages.length],
+        message: getLetterForCard(openCard + 1),
         song: getSongForLetter(openCard + 1),
       }
 
@@ -145,7 +126,7 @@ function App() {
         )}
 
         {stage === STAGE.LETTERS && (
-          <FloatingLetters count={22} onOpen={setOpenCard} openedId={openCard} />
+          <FloatingLetters count={getLetters().length} onOpen={setOpenCard} openedId={openCard} />
         )}
       </div>
 

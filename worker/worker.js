@@ -1,3 +1,5 @@
+import { neon } from '@neondatabase/serverless'
+
 function sanitizeName(name) {
   const base = String(name || '').split('/').pop().split('\\').pop()
   if (!base || base.startsWith('.')) return null
@@ -25,6 +27,14 @@ const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+function db(env) {
+  return neon(env.DATABASE_URL)
+}
+
+async function ensureLettersTable(sql) {
+  await sql`CREATE TABLE IF NOT EXISTS letters (id integer PRIMARY KEY, message text NOT NULL)`
 }
 
 export default {
@@ -71,6 +81,55 @@ export default {
           .sort((a, b) => a.key.localeCompare(b.key))
           .map((o) => o.key)
         return handle(200, { files, letterSongs: configData.letterSongs || {} })
+      }
+
+      if (url.pathname === '/api/letters' && request.method === 'GET') {
+        const sql = db(env)
+        await ensureLettersTable(sql)
+        const rows = await sql`SELECT id, message FROM letters ORDER BY id`
+        return handle(200, {
+          seeded: rows.length > 0,
+          letters: rows.map((r) => ({ id: Number(r.id), message: String(r.message) })),
+        })
+      }
+
+      if (url.pathname === '/api/letters/create' && request.method === 'POST') {
+        if (!authed()) return handle(401, { ok: false, error: 'unauthorized' })
+        const body = await request.json()
+        const sql = db(env)
+        await ensureLettersTable(sql)
+        const rows =
+          await sql`INSERT INTO letters (id, message)
+            VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM letters), ${String(body.message || '')})
+            RETURNING id`
+        return handle(200, { ok: true, id: Number(rows[0].id) })
+      }
+
+      if (url.pathname === '/api/letters' && request.method === 'POST') {
+        if (!authed()) return handle(401, { ok: false, error: 'unauthorized' })
+        const body = await request.json()
+        const entries = Object.entries(body.letters || {})
+        if (entries.length > 0) {
+          const sql = db(env)
+          await ensureLettersTable(sql)
+          await sql.transaction(
+            entries.map(([id, msg]) => sql`INSERT INTO letters (id, message)
+              VALUES (${Number(id)}, ${String(msg)})
+              ON CONFLICT (id) DO UPDATE SET message = EXCLUDED.message`)
+          )
+        }
+        return handle(200, { ok: true })
+      }
+
+      if (url.pathname === '/api/letters' && request.method === 'DELETE') {
+        if (!authed()) return handle(401, { ok: false, error: 'unauthorized' })
+        const id = Number(url.searchParams.get('id'))
+        if (Number.isFinite(id)) {
+          const sql = db(env)
+          await ensureLettersTable(sql)
+          await sql`DELETE FROM letters WHERE id = ${id}`
+        }
+        return handle(200, { ok: true })
       }
 
       if (!authed()) return handle(401, { ok: false, error: 'unauthorized' })
