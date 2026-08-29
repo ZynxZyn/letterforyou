@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Dashboard from './components/Dashboard'
 import PhraseReveal from './components/PhraseReveal'
 import Slideshow from './components/Slideshow'
 import FloatingLetters from './components/FloatingLetters'
 import LetterModal from './components/LetterModal'
 import { phrases } from './data/phrases'
 import { letter, messages } from './data/messages'
-import { getSongForLetter } from './data/songs'
+import { R2_BASE, getSongForLetter, loadRemoteState } from './data/songs'
 import './styles/app.css'
+
+const IS_DASHBOARD = new URLSearchParams(window.location.search).has('dashboard')
 
 const STAGE = {
   INTRO: 'intro',
@@ -45,9 +48,20 @@ function App() {
   const [leaving, setLeaving] = useState(false)
   const [openCard, setOpenCard] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [, setRemoteReady] = useState(false)
   const timerRef = useRef(null)
 
   const shuffledMessages = useMemo(() => seededShuffle(messages, 1337), [])
+
+  useEffect(() => {
+    let active = true
+    loadRemoteState().then(() => {
+      if (active) setRemoteReady(true)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => () => clearTimeout(timerRef.current), [])
 
@@ -82,6 +96,10 @@ function App() {
             : shuffledMessages[openCard % shuffledMessages.length],
         song: getSongForLetter(openCard + 1),
       }
+
+  if (IS_DASHBOARD && (import.meta.env.DEV || R2_BASE)) {
+    return <Dashboard />
+  }
 
   return (
     <>
