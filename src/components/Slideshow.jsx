@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 const images = Object.entries(
-  import.meta.glob('../assets/images/*', {
-    eager: true,
-    query: '?url',
-    import: 'default',
-  })
+  import.meta.glob(
+    ['../assets/images/*.{jpg,jpeg,png,webp,gif}', '!../assets/images/logo-tosla.png'],
+    {
+      eager: true,
+      query: '?url',
+      import: 'default',
+    }
+  )
 ).map(([, src]) => src)
 
 const CAROUSEL_MS = 2600
@@ -315,10 +318,10 @@ function Slideshow({ onComplete }) {
         <h2>
           <em>TOSLA</em> SATU
         </h2>
-        <p className="slideshow-end-sub">geser untuk melihat kembali momen-momen indah</p>
+        <p className="slideshow-end-sub">Romong Lakuma Detule Dehasa Mangiso Pasu pasu Ngimbawe Bau-bau Kumantara</p>
         <Carousel images={images} onDone={onCarouselDone} />
         <button type="button" className="btn-primary" onClick={flyToLetters}>
-          Lanjut ke Surat {'\u2192'}
+          Terimakasih {'\u2192'}
         </button>
       </section>
       {flying && createPortal(<FlyTransition />, document.body)}
