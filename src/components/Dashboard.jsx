@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   createLetter,
   deleteLetter,
@@ -8,7 +8,16 @@ import {
   saveLetter,
   seedLetters,
 } from '../data/letters'
-import { R2_BASE, getLetterSongs, getSongs, loadRemoteState } from '../data/songs'
+import { R2_BASE, NO_SONG, getLetterSongs, getSongs, loadRemoteState } from '../data/songs'
+import {
+  cropAudio,
+  decodeBuffer,
+  encodeMp3,
+  encodeWav,
+  fetchAudioBuffer,
+  fmtDur,
+  parseTime,
+} from '../utils/cropAudio'
 
 const AUDIO_RE = /\.(mp3|wav|ogg|m4a|flac|aac)$/i
 const REMOTE = Boolean(R2_BASE)
@@ -24,13 +33,23 @@ function Dashboard() {
   const [letters, setLetters] = useState([])
   const [seeded, setSeeded] = useState(false)
   const [drafts, setDrafts] = useState({})
+  const [songDrafts, setSongDrafts] = useState({})
   const [dragOver, setDragOver] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [saving, setSaving] = useState(null)
   const [savingLetter, setSavingLetter] = useState(null)
   const [seeding, setSeeding] = useState(false)
   const [adding, setAdding] = useState(false)
   const [message, setMessage] = useState('')
+
+  const [cropFile, setCropFile] = useState('')
+  const [cropBuf, setCropBuf] = useState(null)
+  const [cropDur, setCropDur] = useState(0)
+  const [cropStart, setCropStart] = useState('0:00')
+  const [cropEnd, setCropEnd] = useState('')
+  const [cropFormat, setCropFormat] = useState('mp3')
+  const [cropKbps, setCropKbps] = useState('96')
+  const [cropBusy, setCropBusy] = useState(false)
+  const previewRef = useRef(null)
 
   useEffect(() => {
     Promise.all([loadRemoteState(), loadRemoteLetters()]).then(() => {
@@ -95,20 +114,6 @@ function Dashboard() {
     }
   }
 
-  const onMappingChange = async (num, file) => {
-    if (saving) return
-    setSaving(num)
-    setMessage('Menyimpan pemetaan…')
-    try {
-      await saveMapping({ ...mapping, [num]: file })
-      setMessage('Pemetaan tersimpan. Halaman dimuat ulang…')
-      reloadSoon()
-    } catch (err) {
-      setMessage(`Gagal: ${err.message}`)
-      setSaving(null)
-    }
-  }
-
   const removeSong = async (file) => {
     setMessage(`Menghapus ${file}…`)
     if (REMOTE) {
@@ -127,7 +132,12 @@ function Dashboard() {
     setSavingLetter(id)
     setMessage(`Menyimpan Surat ${id}…`)
     try {
-      await saveLetter(id, drafts[id] ?? letters.find((r) => r.id === id)?.message ?? '')
+      const msg = drafts[id] ?? letters.find((r) => r.id === id)?.message ?? ''
+      const song = songDrafts[id] ?? mapping[id] ?? ''
+      await Promise.all([
+        saveLetter(id, msg),
+        saveMapping({ ...mapping, [id]: song }),
+      ])
       setMessage(`Surat ${id} tersimpan. Halaman dimuat ulang…`)
       reloadSoon()
     } catch (err) {
@@ -177,6 +187,68 @@ function Dashboard() {
     }
   }
 
+  const onCropPick = async (file) => {
+    setCropFile(file)
+    setCropBuf(null)
+    setCropDur(0)
+    if (!file) return
+    const song = songs.find((s) => s.file === file)
+    if (!song) return
+    try {
+      const raw = await fetchAudioBuffer(song.src)
+      const buf = await decodeBuffer(raw)
+      setCropBuf(buf)
+      setCropDur(buf.duration)
+      setCropStart('0:00')
+      setCropEnd(fmtDur(Math.min(90, buf.duration)))
+    } catch (err) {
+      setMessage(`Gagal memuat lagu: ${err.message}`)
+    }
+  }
+
+  const onPreview = () => {
+    const audio = previewRef.current
+    const song = songs.find((s) => s.file === cropFile)
+    const start = parseTime(cropStart)
+    if (!audio || !song || start == null) return
+    audio.src = song.src
+    audio.currentTime = start
+    const end = parseTime(cropEnd)
+    const stop = () => {
+      if (end != null && audio.currentTime >= end) {
+        audio.pause()
+        audio.removeEventListener('timeupdate', stop)
+      }
+    }
+    audio.addEventListener('timeupdate', stop)
+    audio.play().catch(() => {})
+  }
+
+  const onCropSave = async () => {
+    if (!cropBuf || cropBusy) return
+    const start = parseTime(cropStart) ?? 0
+    const end = parseTime(cropEnd) ?? cropBuf.duration
+    if (end <= start) {
+      setMessage('Waktu akhir harus lebih besar dari waktu awal.')
+      return
+    }
+    setCropBusy(true)
+    setMessage('Memotong lagu…')
+    try {
+      const cropped = await cropAudio(cropBuf, start, end, { sampleRate: 22050 })
+      const blob =
+        cropFormat === 'wav' ? encodeWav(cropped) : encodeMp3(cropped, Number(cropKbps))
+      const base = cropFile.replace(/\.[^.]+$/, '')
+      const name = `${base} [${fmtDur(start)}-${fmtDur(end)}].${cropFormat}`
+      await upload(new File([blob], name, { type: blob.type }))
+      setMessage(`Lagu terpotong disimpan (${name}). Halaman dimuat ulang…`)
+      reloadSoon()
+    } catch (err) {
+      setMessage(`Gagal memotong: ${err.message}`)
+      setCropBusy(false)
+    }
+  }
+
   return (
     <div className="dashboard stage-enter">
       <header className="dash-topbar">
@@ -221,6 +293,95 @@ function Dashboard() {
       </section>
 
       <section className="dash-card">
+        <h2 className="dash-card-title">Potong Lagu</h2>
+        <p className="dash-card-desc">
+          Pilih lagu, tentukan bagian menit-ke-menit, lalu potong. Output mono 22.05 kHz agar
+          ukurannya kecil (MP3 lebih ringkas dari WAV).
+        </p>
+        <div className="dash-crop">
+          <div className="dash-crop-row">
+            <label htmlFor="crop-song">Lagu</label>
+            <select
+              id="crop-song"
+              value={cropFile}
+              disabled={cropBusy}
+              onChange={(e) => onCropPick(e.target.value)}
+            >
+              <option value="">— pilih lagu —</option>
+              {songs.map((s) => (
+                <option key={s.file} value={s.file}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          {cropDur > 0 && (
+            <>
+              <p className="dash-crop-dur">Durasi lagu: {fmtDur(cropDur)}</p>
+              <div className="dash-crop-row">
+                <label htmlFor="crop-start">Dari</label>
+                <input
+                  id="crop-start"
+                  value={cropStart}
+                  disabled={cropBusy}
+                  onChange={(e) => setCropStart(e.target.value)}
+                  placeholder="0:00"
+                />
+                <label htmlFor="crop-end">Sampai</label>
+                <input
+                  id="crop-end"
+                  value={cropEnd}
+                  disabled={cropBusy}
+                  onChange={(e) => setCropEnd(e.target.value)}
+                  placeholder={fmtDur(cropDur)}
+                />
+                <button
+                  type="button"
+                  className="dash-btn-ghost"
+                  onClick={onPreview}
+                  title="Putar bagian yang dipilih"
+                >
+                  {'\u25B6'} Putar
+                </button>
+              </div>
+              <div className="dash-crop-row">
+                <label htmlFor="crop-format">Format</label>
+                <select
+                  id="crop-format"
+                  value={cropFormat}
+                  disabled={cropBusy}
+                  onChange={(e) => setCropFormat(e.target.value)}
+                >
+                  <option value="mp3">MP3 (kecil)</option>
+                  <option value="wav">WAV</option>
+                </select>
+                <label htmlFor="crop-kbps">Bitrate</label>
+                <select
+                  id="crop-kbps"
+                  value={cropKbps}
+                  disabled={cropBusy || cropFormat !== 'mp3'}
+                  onChange={(e) => setCropKbps(e.target.value)}
+                >
+                  <option value="64">64 kbps</option>
+                  <option value="96">96 kbps</option>
+                  <option value="128">128 kbps</option>
+                </select>
+                <button
+                  type="button"
+                  className="dash-add-btn"
+                  disabled={cropBusy}
+                  onClick={onCropSave}
+                >
+                  {cropBusy ? 'Memotong…' : 'Potong & Simpan'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+        <audio ref={previewRef} style={{ display: 'none' }} />
+      </section>
+
+      <section className="dash-card">
         <h2 className="dash-card-title">
           Lagu Tersedia <span className="dash-count">{songs.length}</span>
         </h2>
@@ -248,7 +409,7 @@ function Dashboard() {
       <section className="dash-card">
         <div className="dash-card-head">
           <h2 className="dash-card-title">
-            Isi Surat <span className="dash-count">{letters.length}</span>
+            Surat & Lagu <span className="dash-count">{letters.length}</span>
           </h2>
           <button
             type="button"
@@ -261,8 +422,8 @@ function Dashboard() {
         </div>
         <p className="dash-card-desc">
           {REMOTE
-            ? 'Tambah, edit, dan hapus surat. Tersimpan ke database Neon Postgres.'
-            : 'Mode lokal: CRUD surat memerlukan Neon Postgres (set VITE_R2_BASE & secret DATABASE_URL).'}
+            ? 'Tulis isi surat dan pilih lagunya dalam satu baris, lalu klik Simpan (keduanya tersimpan sekaligus ke Neon + R2).'
+            : 'Mode lokal: pengelolaan surat & lagu memerlukan R2 + Neon (set VITE_R2_BASE & secret DATABASE_URL).'}
         </p>
         {REMOTE && !seeded && (
           <div className="dash-banner">
@@ -275,6 +436,8 @@ function Dashboard() {
         <div className="dash-letters">
           {letters.map((row) => {
             const value = drafts[row.id] ?? row.message
+            const songValue = songDrafts[row.id] ?? mapping[row.id] ?? ''
+            const dirty = value !== row.message || songValue !== (mapping[row.id] ?? '')
             return (
               <div key={row.id} className="dash-letter">
                 <div className="dash-letter-head">
@@ -292,7 +455,7 @@ function Dashboard() {
                     <button
                       type="button"
                       className="dash-letter-save"
-                      disabled={!REMOTE || savingLetter === row.id || value === row.message}
+                      disabled={!REMOTE || savingLetter === row.id || !dirty}
                       onClick={() => onSaveLetter(row.id)}
                     >
                       {savingLetter === row.id ? 'Menyimpan…' : 'Simpan'}
@@ -306,38 +469,26 @@ function Dashboard() {
                   onChange={(e) => setDrafts((d) => ({ ...d, [row.id]: e.target.value }))}
                   rows={3}
                 />
+                <div className="dash-letter-song">
+                  <label htmlFor={`map-${row.id}`}>Lagu</label>
+                  <select
+                    id={`map-${row.id}`}
+                    value={songValue}
+                    disabled={!REMOTE || savingLetter === row.id}
+                    onChange={(e) => setSongDrafts((d) => ({ ...d, [row.id]: e.target.value }))}
+                  >
+                    <option value="">Otomatis (giliran)</option>
+                    <option value={NO_SONG}>Tanpa Lagu</option>
+                    {songs.map((s) => (
+                      <option key={s.file} value={s.file}>
+                        {s.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )
           })}
-        </div>
-      </section>
-
-      <section className="dash-card">
-        <h2 className="dash-card-title">
-          Lagu per Surat <span className="dash-count">{letters.length}</span>
-        </h2>
-        <p className="dash-card-desc">
-          Pilih lagu untuk tiap amplop. Pilih «otomatis» untuk memakai giliran.
-        </p>
-        <div className="dash-grid">
-          {letters.map((row) => (
-            <div key={`map-${row.id}`} className="dash-row">
-              <label htmlFor={`map-${row.id}`}>Surat {row.id}</label>
-              <select
-                id={`map-${row.id}`}
-                value={mapping[row.id] || ''}
-                disabled={saving === row.id}
-                onChange={(e) => onMappingChange(row.id, e.target.value)}
-              >
-                <option value="">Otomatis</option>
-                {songs.map((s) => (
-                  <option key={s.file} value={s.file}>
-                    {s.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
         </div>
       </section>
     </div>

@@ -1420,6 +1420,72 @@ button:focus-visible {
   margin-bottom: 14px;
 }
 
+.dash-crop {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dash-crop-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dash-crop-row label {
+  flex: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4b5563;
+  min-width: 48px;
+}
+
+.dash-crop-row select,
+.dash-crop-row input {
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #d8dfe7;
+  background: #fff;
+  color: #1f2937;
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.dash-crop-row input {
+  max-width: 110px;
+}
+
+.dash-crop-row select:focus-visible,
+.dash-crop-row input:focus-visible {
+  outline: 2px solid var(--color-blue);
+  outline-offset: 1px;
+}
+
+.dash-crop-dur {
+  font-size: 0.78rem;
+  color: #6b7a8d;
+}
+
+.dash-btn-ghost {
+  flex: none;
+  border: 1px solid #c3d5e4;
+  border-radius: 999px;
+  padding: 7px 16px;
+  background: #fff;
+  color: var(--color-blue);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dash-btn-ghost:hover {
+  background: #eef4fb;
+}
+
 .dash-dropzone {
   border: 2px dashed #cbd5e1;
   border-radius: 12px;
@@ -1645,6 +1711,37 @@ button:focus-visible {
 .dash-letter textarea:disabled {
   background: #f1f4f7;
   color: #9aa5b1;
+}
+
+.dash-letter-song {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.dash-letter-song label {
+  flex: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.dash-letter-song select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #d8dfe7;
+  background: #fff;
+  color: #1f2937;
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.dash-letter-song select:focus-visible {
+  outline: 2px solid var(--color-blue);
+  outline-offset: 1px;
 }
 
 @media (max-width: 640px) {

@@ -57,9 +57,9 @@ function MusicPlayer({ song, onStop }) {
 
   if (!song) {
     return (
-      <div className="music-note" aria-label="Tidak ada lagu tersedia">
+      <div className="music-note" aria-label="Surat ini tanpa musik">
         <span aria-hidden="true">{'\u266B'}</span>
-        Tambahkan file lagu ke <code>src/assets/audio/</code> untuk musik.
+        Surat ini tanpa musik.
       </div>
     )
   }

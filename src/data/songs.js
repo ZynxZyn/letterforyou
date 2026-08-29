@@ -60,9 +60,12 @@ export function getLetterSongs() {
   return letterSongs
 }
 
+export const NO_SONG = '__none__'
+
 export function getSongForLetter(number) {
   const songs = getSongs()
   const mapped = getLetterSongs()[number]
+  if (mapped === NO_SONG) return null
   if (mapped) {
     const found = songs.find((s) => s.file.toLowerCase() === String(mapped).toLowerCase())
     if (found) return found
