@@ -50,6 +50,7 @@ function Dashboard() {
   const [cropKbps, setCropKbps] = useState('96')
   const [cropBusy, setCropBusy] = useState(false)
   const previewRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     Promise.all([loadRemoteState(), loadRemoteLetters()]).then(() => {
@@ -75,25 +76,37 @@ function Dashboard() {
     }
   }
 
-  const onDrop = async (e) => {
-    e.preventDefault()
-    setDragOver(false)
-    if (busy) return
-    const files = Array.from(e.dataTransfer.files).filter((f) => AUDIO_RE.test(f.name))
-    if (!files.length) {
+  const uploadFiles = async (files) => {
+    const audioFiles = Array.from(files).filter((f) => AUDIO_RE.test(f.name))
+    if (!audioFiles.length) {
       setMessage('Tidak ada file audio yang valid (mp3/wav/ogg/m4a/flac/aac).')
       return
     }
     setBusy(true)
-    setMessage(`Mengunggah ${files.length} lagu…`)
+    setMessage(`Mengunggah ${audioFiles.length} lagu…`)
     try {
-      for (const f of files) await upload(f)
+      for (const f of audioFiles) await upload(f)
       setMessage('Upload selesai. Halaman dimuat ulang…')
       reloadSoon()
     } catch (err) {
       setMessage(`Gagal: ${err.message}`)
       setBusy(false)
     }
+  }
+
+  const onDrop = (e) => {
+    e.preventDefault()
+    setDragOver(false)
+    if (!busy) uploadFiles(e.dataTransfer.files)
+  }
+
+  const onPickFiles = (e) => {
+    if (!busy) uploadFiles(e.target.files)
+    e.target.value = ''
+  }
+
+  const openPicker = () => {
+    if (!busy) fileInputRef.current?.click()
   }
 
   const saveMapping = async (next) => {
@@ -270,10 +283,28 @@ function Dashboard() {
       <section className="dash-card">
         <h2 className="dash-card-title">Upload Lagu</h2>
         <p className="dash-card-desc">
-          Seret file lagu ke dalam kotak. Format yang didukung: mp3, wav, ogg, m4a, flac, aac.
+          Seret & lepas file lagu, atau ketuk kotak untuk memilih dari perangkat (termasuk HP).
+          Format: mp3, wav, ogg, m4a, flac, aac.
         </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*"
+          multiple
+          style={{ display: 'none' }}
+          onChange={onPickFiles}
+        />
         <div
           className={`dash-dropzone ${dragOver ? 'is-dragover' : ''}`}
+          role="button"
+          tabIndex={0}
+          onClick={openPicker}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              openPicker()
+            }
+          }}
           onDragOver={(e) => {
             e.preventDefault()
             setDragOver(true)
@@ -286,7 +317,7 @@ function Dashboard() {
           ) : (
             <p className="dash-drop-text">
               <span className="dash-drop-icon">{'\u2191'}</span>
-              <strong>Seret & lepas file lagu di sini</strong>
+              <strong>Ketuk untuk pilih file, atau seret & lepas di sini</strong>
             </p>
           )}
         </div>
