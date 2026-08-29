@@ -1113,15 +1113,20 @@ button:focus-visible {
   }
 
   .letter-card {
-    width: 88px;
-    height: 116px;
-    padding-bottom: 12px;
+    width: 64px;
+    height: 84px;
+    padding-bottom: 9px;
+    border-radius: 6px;
   }
 
   .letter-card::after {
-    width: 30px;
-    height: 30px;
-    font-size: 12px;
+    width: 22px;
+    height: 22px;
+    font-size: 9px;
+  }
+
+  .letter-card-label {
+    font-size: 0.5rem;
   }
 
   .letter-card-label {

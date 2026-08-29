@@ -26,7 +26,7 @@ function buildMotion(count) {
   const isMobile = window.matchMedia('(max-width: 640px)').matches
   return Array.from({ length: count }, (_, i) => {
     const depth = 0.6 + rng() * 1.4
-    const speed = 35 + rng() * 90
+    const speed = (35 + rng() * 90) * (isMobile ? 0.55 : 1)
     const angle = rng() * Math.PI * 2
     return {
       id: i,
@@ -35,11 +35,11 @@ function buildMotion(count) {
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       rot: (rng() - 0.5) * 30,
-      rotSpeed: (rng() - 0.5) * 55,
+      rotSpeed: (rng() - 0.5) * 55 * (isMobile ? 0.6 : 1),
       depth,
       zIndex: Math.round(depth * 10),
-      w: isMobile ? 88 : 140,
-      h: isMobile ? 116 : 182,
+      w: isMobile ? 64 : 140,
+      h: isMobile ? 84 : 182,
     }
   })
 }
