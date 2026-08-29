@@ -21,6 +21,7 @@ const HEARTS = Array.from({ length: 14 }, (_, i) => ({
   size: 14 + ((i * 13) % 22),
   duration: 7 + ((i * 5) % 9),
   delay: -((i * 2.3) % 10),
+  blue: i % 2 === 0,
 }))
 
 function seededShuffle(arr, seed) {
@@ -43,11 +44,23 @@ function App() {
   const [stage, setStage] = useState(STAGE.INTRO)
   const [leaving, setLeaving] = useState(false)
   const [openCard, setOpenCard] = useState(null)
+  const [showModal, setShowModal] = useState(false)
   const timerRef = useRef(null)
 
   const shuffledMessages = useMemo(() => seededShuffle(messages, 1337), [])
 
   useEffect(() => () => clearTimeout(timerRef.current), [])
+
+  useEffect(() => {
+    if (openCard == null) return undefined
+    const t = setTimeout(() => setShowModal(true), 850)
+    return () => clearTimeout(t)
+  }, [openCard])
+
+  const closeCard = useCallback(() => {
+    setOpenCard(null)
+    setShowModal(false)
+  }, [])
 
   const goTo = useCallback((next) => {
     if (leaving) return
@@ -79,6 +92,7 @@ function App() {
               {HEARTS.map((h) => (
                 <span
                   key={h.id}
+                  className={h.blue ? 'is-blue' : ''}
                   style={{
                     left: `${h.left}%`,
                     fontSize: `${h.size}px`,
@@ -113,17 +127,17 @@ function App() {
         )}
 
         {stage === STAGE.LETTERS && (
-          <FloatingLetters count={22} onOpen={setOpenCard} />
+          <FloatingLetters count={22} onOpen={setOpenCard} openedId={openCard} />
         )}
       </div>
 
-      {opened && (
+      {opened && showModal && (
         <LetterModal
           index={opened.index}
           message={opened.message}
           song={opened.song}
-          onClose={() => setOpenCard(null)}
-          onStopMusic={() => setOpenCard(null)}
+          onClose={closeCard}
+          onStopMusic={closeCard}
         />
       )}
     </>

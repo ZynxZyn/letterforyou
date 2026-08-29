@@ -19,6 +19,7 @@ const HEARTS = Array.from({ length: 14 }, (_, i) => ({
   size: 14 + ((i * 13) % 22),
   duration: 7 + ((i * 5) % 9),
   delay: -((i * 2.3) % 10),
+  blue: i % 2 === 1,
 }))
 
 function buildMotion(count) {
@@ -44,7 +45,7 @@ function buildMotion(count) {
   })
 }
 
-function FloatingLetters({ count = 22, onOpen }) {
+function FloatingLetters({ count = 22, onOpen, openedId = null }) {
   const cards = useMemo(() => buildMotion(count), [count])
   const state = useMemo(() => cards.map((c) => ({ ...c })), [cards])
   const driftEls = useRef([])
@@ -108,6 +109,7 @@ function FloatingLetters({ count = 22, onOpen }) {
         {HEARTS.map((h) => (
           <span
             key={h.id}
+            className={h.blue ? 'is-blue' : ''}
             style={{
               left: `${h.left}%`,
               fontSize: `${h.size}px`,
@@ -139,10 +141,11 @@ function FloatingLetters({ count = 22, onOpen }) {
           >
             <button
               type="button"
-              className="letter-card"
+              className={`letter-card ${card.id === openedId ? 'is-opening' : ''}`}
               onClick={() => onOpen(card.id)}
               aria-label={`Buka surat nomor ${card.id + 1}`}
             >
+              <span className="letter-paper" aria-hidden="true" />
               <span className="letter-card-label">Surat {card.id + 1}</span>
             </button>
           </div>

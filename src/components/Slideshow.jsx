@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 const images = Object.entries(
   import.meta.glob('../assets/images/*', {
@@ -8,8 +9,32 @@ const images = Object.entries(
   })
 ).map(([, src]) => src)
 
-const INTERVAL = 4000
+const CAROUSEL_MS = 2600
 const FLY_MS = 3600
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+}
+
+function animateScrollTo(container, target, duration, onDone) {
+  if (!container) return () => {}
+  const start = container.scrollTop
+  const delta = target - start
+  if (Math.abs(delta) < 1) {
+    if (onDone) onDone()
+    return () => {}
+  }
+  const t0 = performance.now()
+  let raf = 0
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / duration)
+    container.scrollTop = start + delta * easeInOutCubic(p)
+    if (p < 1) raf = requestAnimationFrame(step)
+    else if (onDone) onDone()
+  }
+  raf = requestAnimationFrame(step)
+  return () => cancelAnimationFrame(raf)
+}
 
 function FlyTransition() {
   const streaks = useMemo(
@@ -83,24 +108,164 @@ function FlyTransition() {
   )
 }
 
-function Slideshow({ onComplete }) {
-  const [current, setCurrent] = useState(0)
-  const [flying, setFlying] = useState(false)
-  const timerRef = useRef(null)
+function Carousel({ images: imgs, onDone }) {
+  const trackRef = useRef(null)
+  const loopsRef = useRef(0)
+  const doneRef = useRef(false)
+  const onDoneRef = useRef(onDone)
 
   useEffect(() => {
-    if (images.length === 0) return undefined
-    const t = setInterval(() => setCurrent((c) => (c + 1) % images.length), INTERVAL)
+    onDoneRef.current = onDone
+  }, [onDone])
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      const track = trackRef.current
+      if (!track) return
+      const max = track.scrollWidth - track.clientWidth
+      if (track.scrollLeft >= max - 8) {
+        track.scrollTo({ left: 0, behavior: 'smooth' })
+        loopsRef.current += 1
+        if (loopsRef.current >= 2 && !doneRef.current) {
+          doneRef.current = true
+          onDoneRef.current()
+        }
+      } else {
+        track.scrollBy({ left: track.clientWidth * 0.85, behavior: 'smooth' })
+      }
+    }, CAROUSEL_MS)
     return () => clearInterval(t)
   }, [])
 
+  return (
+    <div className="carousel" ref={trackRef} aria-label="Galeri kenangan">
+      {imgs.map((src, i) => (
+        <img key={src} src={src} alt={`Kenangan ${i + 1}`} loading="lazy" draggable="false" />
+      ))}
+    </div>
+  )
+}
+
+function Slideshow({ onComplete }) {
+  const containerRef = useRef(null)
+  const sectionRefs = useRef([])
+  const timerRef = useRef(null)
+  const flyingRef = useRef(false)
+  const scrollCancelRef = useRef(null)
+
+  const [flying, setFlying] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const reduced = useMemo(
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    []
+  )
+  const isMobile = useMemo(() => window.matchMedia('(max-width: 640px)').matches, [])
+  const [autoActive, setAutoActive] = useState(!reduced && images.length > 0)
+  const autoRef = useRef(autoActive)
+
+  useEffect(() => {
+    autoRef.current = autoActive
+  }, [autoActive])
+
   useEffect(() => () => clearTimeout(timerRef.current), [])
 
-  const flyToLetters = () => {
-    if (flying) return
+  const flyToLetters = useCallback(() => {
+    if (flyingRef.current) return
+    flyingRef.current = true
     setFlying(true)
     timerRef.current = setTimeout(onComplete, FLY_MS)
-  }
+  }, [onComplete])
+
+  const scrollToSection = useCallback((el, duration, onDone) => {
+    const container = containerRef.current
+    if (!container || !el) {
+      if (onDone) onDone()
+      return
+    }
+    if (scrollCancelRef.current) scrollCancelRef.current()
+    const target =
+      container.scrollTop + el.getBoundingClientRect().top - container.getBoundingClientRect().top
+    scrollCancelRef.current = animateScrollTo(container, target, duration, onDone)
+  }, [])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return undefined
+    const cancel = () => setAutoActive(false)
+    el.addEventListener('wheel', cancel, { passive: true })
+    el.addEventListener('touchstart', cancel, { passive: true })
+    el.addEventListener('pointerdown', cancel)
+    return () => {
+      el.removeEventListener('wheel', cancel)
+      el.removeEventListener('touchstart', cancel)
+      el.removeEventListener('pointerdown', cancel)
+    }
+  }, [])
+
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) entry.target.classList.add('is-visible')
+        })
+      },
+      { threshold: 0.25 }
+    )
+    sectionRefs.current.forEach((el) => el && obs.observe(el))
+    return () => obs.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return undefined
+    let raf = 0
+    const onScroll = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        const ratio = el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight)
+        setProgress(Math.min(1, ratio))
+      })
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      cancelAnimationFrame(raf)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!autoActive || images.length === 0) return undefined
+    const el = containerRef.current
+    if (!el) return undefined
+    let raf = 0
+    let last = performance.now()
+    const speed = isMobile ? 100 : 130
+
+    const step = (now) => {
+      const dt = Math.min((now - last) / 1000, 0.1)
+      last = now
+      const max = el.scrollHeight - el.clientHeight
+      if (el.scrollTop < max) {
+        el.scrollTop = Math.min(max, el.scrollTop + speed * dt)
+        raf = requestAnimationFrame(step)
+      }
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [autoActive, isMobile])
+
+  const finishAuto = useCallback(() => {
+    if (!autoRef.current) return
+    const btn = sectionRefs.current[sectionRefs.current.length - 1]
+    if (!btn) return
+    scrollToSection(btn, 1400, () => {
+      timerRef.current = setTimeout(() => {
+        if (autoRef.current) flyToLetters()
+      }, 1200)
+    })
+  }, [scrollToSection, flyToLetters])
+
+  const onCarouselDone = useCallback(() => finishAuto(), [finishAuto])
 
   if (images.length === 0) {
     return (
@@ -116,44 +281,47 @@ function Slideshow({ onComplete }) {
         <button type="button" className="btn-primary" onClick={flyToLetters}>
           Lanjut ke Surat {'\u2192'}
         </button>
-        {flying && <FlyTransition />}
+        {flying && createPortal(<FlyTransition />, document.body)}
       </div>
     )
   }
 
   return (
-    <div className="slideshow stage-enter">
-      <p className="slideshow-index" aria-live="polite">
-        {current + 1} / {images.length}
-      </p>
-      <div className="slideshow-dots" role="tablist" aria-label="Pilih foto">
-        {images.map((_, i) => (
-          <button
-            key={i}
-            type="button"
-            role="tab"
-            aria-selected={i === current}
-            aria-label={`Foto ${i + 1}`}
-            className={i === current ? 'is-active' : ''}
-            onClick={() => setCurrent(i)}
-          />
-        ))}
+    <div
+      ref={containerRef}
+      className={`slideshow stage-enter ${flying ? 'is-flying' : ''}`}
+    >
+      <div className="slideshow-progress" aria-hidden="true">
+        <span style={{ width: `${progress * 100}%` }} />
       </div>
       {images.map((src, i) => (
-        <div
+        <section
           key={src}
-          className={`slide ${i === current ? 'is-active' : ''}`}
-          aria-hidden={i !== current}
+          ref={(el) => {
+            sectionRefs.current[i] = el
+          }}
+          className="slide-section"
+          aria-label={`Kenangan ${i + 1}`}
         >
           <img src={src} alt={`Kenangan ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} />
-        </div>
+        </section>
       ))}
-      <div className="slideshow-actions">
+      <section
+        ref={(el) => {
+          sectionRefs.current[images.length] = el
+        }}
+        className="slideshow-end"
+      >
+        <h2>
+          <em>TOSLA</em> SATU
+        </h2>
+        <p className="slideshow-end-sub">geser untuk melihat kembali momen-momen indah</p>
+        <Carousel images={images} onDone={onCarouselDone} />
         <button type="button" className="btn-primary" onClick={flyToLetters}>
           Lanjut ke Surat {'\u2192'}
         </button>
-      </div>
-      {flying && <FlyTransition />}
+      </section>
+      {flying && createPortal(<FlyTransition />, document.body)}
     </div>
   )
 }
