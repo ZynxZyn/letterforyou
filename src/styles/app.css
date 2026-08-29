@@ -844,17 +844,17 @@ button:focus-visible {
 
 .letter-card {
   position: relative;
-  width: 160px;
-  height: 208px;
+  width: 140px;
+  height: 182px;
   border: none;
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--color-white);
   color: var(--color-black);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: 22px;
+  padding-bottom: 18px;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
@@ -877,15 +877,15 @@ button:focus-visible {
   top: 43%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   background: var(--color-red);
   color: #fff;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 21px;
+  font-size: 18px;
   box-shadow: inset 0 -3px 5px rgba(0, 0, 0, 0.35), 0 3px 8px rgba(0, 0, 0, 0.4);
   z-index: 2;
 }
@@ -1113,15 +1113,15 @@ button:focus-visible {
   }
 
   .letter-card {
-    width: 100px;
-    height: 132px;
-    padding-bottom: 14px;
+    width: 88px;
+    height: 116px;
+    padding-bottom: 12px;
   }
 
   .letter-card::after {
-    width: 34px;
-    height: 34px;
-    font-size: 14px;
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
   }
 
   .letter-card-label {
