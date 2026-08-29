@@ -61,12 +61,38 @@ export default {
         const name = decodeURIComponent(audioMatch[1])
         const obj = await env.BUCKET.get(name)
         if (!obj) return new Response('not found', { status: 404, headers: cors })
+        const baseHeaders = {
+          ...cors,
+          'Content-Type': mimeFor(name),
+          'Cache-Control': 'public, max-age=86400',
+          'Accept-Ranges': 'bytes',
+        }
+        const range = request.headers.get('Range')
+        if (range) {
+          const match = /^bytes=(\d+)-(\d*)$/.exec(range)
+          const start = match ? Math.min(Number(match[1]), obj.size - 1) : 0
+          const end =
+            match && match[2] ? Math.min(Number(match[2]), obj.size - 1) : obj.size - 1
+          if (start > end) {
+            return new Response(null, {
+              status: 416,
+              headers: { ...baseHeaders, 'Content-Range': `bytes */${obj.size}` },
+            })
+          }
+          const sliced = await env.BUCKET.get(name, {
+            range: { offset: start, length: end - start + 1 },
+          })
+          return new Response(sliced.body, {
+            status: 206,
+            headers: {
+              ...baseHeaders,
+              'Content-Range': `bytes ${start}-${end}/${obj.size}`,
+              'Content-Length': String(end - start + 1),
+            },
+          })
+        }
         return new Response(obj.body, {
-          headers: {
-            ...cors,
-            'Content-Type': mimeFor(name),
-            'Cache-Control': 'public, max-age=86400',
-          },
+          headers: { ...baseHeaders, 'Content-Length': String(obj.size) },
         })
       }
 

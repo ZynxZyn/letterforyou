@@ -1134,20 +1134,33 @@ button:focus-visible {
 
 .music-bar {
   flex: none;
+  position: relative;
   width: 130px;
+  height: 18px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.music-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
   height: 5px;
+  transform: translateY(-50%);
   border-radius: 3px;
   background: #ddd;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
 }
 
 .music-bar span {
   position: absolute;
-  inset: 0 auto 0 0;
-  background: var(--color-blue);
+  left: 0;
+  top: 50%;
+  height: 5px;
+  transform: translateY(-50%);
   border-radius: 3px;
+  background: var(--color-blue);
 }
 
 .music-note {
@@ -1248,7 +1261,7 @@ button:focus-visible {
   }
 
   .music-bar {
-    width: 74px;
+    width: 96px;
   }
 
   .modal-card {
