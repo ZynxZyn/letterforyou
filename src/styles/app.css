@@ -170,8 +170,15 @@ button:focus-visible {
 }
 
 .intro-title em {
-  color: var(--color-red);
   font-style: normal;
+}
+
+.intro-title .tosla-red {
+  color: var(--color-red);
+}
+
+.intro-title .tosla-blue {
+  color: var(--color-blue);
 }
 
 .intro-sub {
@@ -528,11 +535,11 @@ button:focus-visible {
 .slideshow-end h2 {
   font-family: var(--font-display);
   font-size: clamp(1.7rem, 5vw, 2.8rem);
-  color: var(--color-blue);
+  color: var(--color-red);
 }
 
 .slideshow-end h2 em {
-  color: var(--color-red);
+  color: var(--color-blue);
   font-style: normal;
 }
 

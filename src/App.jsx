@@ -171,7 +171,7 @@ function App() {
             </div>
             <p className="intro-kicker">LetterForYou</p>
             <h1 className="intro-title">
-              Untuk Kalian, <em>Tosla 027</em>
+              Untuk Kalian, <em><span className="tosla-blue">TOSLA</span> <span className="tosla-red">027</span></em>
             </h1>
             <p className="intro-sub">
               Sebuah surat kecil berisi rasa terima kasih yang tak pernah sempat kami ucapkan.
