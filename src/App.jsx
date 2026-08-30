@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Dashboard from './components/Dashboard'
 import PhraseReveal from './components/PhraseReveal'
 import Slideshow from './components/Slideshow'
@@ -6,7 +7,7 @@ import FloatingLetters from './components/FloatingLetters'
 import LetterModal from './components/LetterModal'
 import { phrases } from './data/phrases'
 import { getLetterRowForCard, getLetterRows, getLetters, loadRemoteLetters } from './data/letters'
-import { R2_BASE, getSongForLetter, loadRemoteState } from './data/songs'
+import { getLocalSongs, R2_BASE, getSongForLetter, loadRemoteState } from './data/songs'
 import './styles/app.css'
 
 const IS_DASHBOARD = new URLSearchParams(window.location.search).has('dashboard')
@@ -16,6 +17,63 @@ const STAGE = {
   PHRASES: 'phrases',
   SLIDESHOW: 'slideshow',
   LETTERS: 'letters',
+}
+
+function BackgroundMusic({ playing, visible }) {
+  const audioRef = useRef(null)
+  const [muted, setMuted] = useState(false)
+  const song = getLocalSongs()[0] || null
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return undefined
+    if (playing) {
+      audio.play().catch(() => {})
+    } else {
+      audio.pause()
+    }
+  }, [playing])
+
+  const toggleMute = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (audio.muted) {
+      audio.muted = false
+      setMuted(false)
+      if (audio.paused && playing) audio.play().catch(() => {})
+    } else {
+      audio.muted = true
+      setMuted(true)
+    }
+  }
+
+  if (!song) return null
+
+  return createPortal(
+    <button
+      type="button"
+      className="slideshow-mute"
+      onClick={toggleMute}
+      aria-label={muted ? 'Nyalakan suara' : 'Bisukan suara'}
+      style={{ opacity: visible ? 1 : 0, pointerEvents: visible ? 'auto' : 'none' }}
+    >
+      <audio ref={audioRef} src={song.src} preload="auto" loop />
+      {muted ? (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+          <path d="M3 9v6h4l5 5V4L7 9H3z" fill="currentColor" />
+          <line x1="16" y1="9" x2="22" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <line x1="22" y1="9" x2="16" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+          <path d="M3 9v6h4l5 5V4L7 9H3z" fill="currentColor" />
+          <path d="M15.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M18 6a9 9 0 0 1 0 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      )}
+    </button>,
+    document.body
+  )
 }
 
 const HEARTS = Array.from({ length: 14 }, (_, i) => ({
@@ -82,8 +140,16 @@ function App() {
     return <Dashboard />
   }
 
+  const reachedSlideshow = stage === STAGE.SLIDESHOW || stage === STAGE.LETTERS
+
   return (
     <>
+      {reachedSlideshow && (
+        <BackgroundMusic
+          playing={reachedSlideshow && openCard == null}
+          visible={openCard == null}
+        />
+      )}
       <div className={`stage-wrap ${leaving ? 'is-leaving' : ''}`}>
         {stage === STAGE.INTRO && (
           <div className="intro stage-enter">
@@ -105,7 +171,7 @@ function App() {
             </div>
             <p className="intro-kicker">LetterForYou</p>
             <h1 className="intro-title">
-              Untuk Kalian, <em>Para Pendahulu</em>
+              Untuk Kalian, <em>Tosla 027</em>
             </h1>
             <p className="intro-sub">
               Sebuah surat kecil berisi rasa terima kasih yang tak pernah sempat kami ucapkan.

@@ -55,6 +55,10 @@ export function getSongs() {
   return localSongs
 }
 
+export function getLocalSongs() {
+  return localSongs
+}
+
 export function getLetterSongs() {
   if (remoteState && remoteState.letterSongs) return remoteState.letterSongs
   return letterSongs

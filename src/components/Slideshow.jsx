@@ -331,7 +331,7 @@ function Slideshow({ onComplete }) {
         <p className="slideshow-end-sub">Romong Lakuma Detule Dehasa Mangiso Pasu pasu Ngimbawe Bau-bau Kumantara</p>
         <Carousel images={items} onDone={onCarouselDone} />
         <button type="button" className="btn-primary" onClick={flyToLetters}>
-          Terimakasih {'\u2192'}
+          Berikutnya {'\u2192'}
         </button>
       </section>
       {flying && createPortal(<FlyTransition />, document.body)}
